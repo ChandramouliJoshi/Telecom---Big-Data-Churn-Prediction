@@ -1,0 +1,67 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+env/
+.venv/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# VS Code
+.vscode/
+
+# PyCharm
+.idea/
+
+# Environment Variables
+.env
+
+# Logs
+*.log
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Spark Temporary Files
+spark-warehouse/
+metastore_db/
+
+# Spark Event Logs
+spark-events/
+
+# Model Files
+models/
+*.model
+
+# Processed Data
+data/processed/
+
+# Output Files
+outputs/
+
+# Large Raw Data Files
+data/raw/*.csv
+data/raw/*.parquet
+
+# Docker
+*.tar
+
+# MLflow (if used later)
+mlruns/
+
+# Build Files
+dist/
+build/
+*.egg-info/
+
+# Temporary Files
+tmp/
+temp/
+
+# Cache
+.cache/
