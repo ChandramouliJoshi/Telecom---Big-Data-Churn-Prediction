@@ -5,6 +5,10 @@ Day 1 scope:
 - Load the raw telecom customer dataset.
 - Inspect schema and columns.
 - Validate the target column (`Churn Value`) for modeling readiness.
+
+Day 2 scope:
+- Register the dataset as a Spark SQL temporary view.
+- Verify the temp view with simple validation queries.
 """
 
 from pyspark.sql import DataFrame, SparkSession
@@ -12,6 +16,7 @@ from pyspark.sql import DataFrame, SparkSession
 from src.config.spark_config import create_spark_session
 
 RAW_DATA_PATH = "data/raw/Telco_customer_churn.csv"
+TEMP_VIEW_NAME = "telco_customers"
 
 
 def load_raw_data(spark: SparkSession, path: str = RAW_DATA_PATH) -> DataFrame:
@@ -58,10 +63,47 @@ def validate_target_column(df: DataFrame) -> None:
     df.groupBy("Churn Value").count().orderBy("Churn Value").show()
 
 
+def register_temp_view(df: DataFrame, view_name: str = TEMP_VIEW_NAME) -> None:
+    """
+    Register a DataFrame as a Spark SQL temporary view so it can be
+    queried with SQL syntax.
+
+    Args:
+        df: DataFrame to register.
+        view_name: Name to register the view under.
+    """
+    df.createOrReplaceTempView(view_name)
+
+
+def verify_temp_view(spark: SparkSession) -> None:
+    """
+    Run simple validation queries against the temp view to confirm it
+    was registered correctly and is queryable.
+
+    Args:
+        spark: Active SparkSession with the temp view already registered.
+    """
+    print(f"Verifying temp view `{TEMP_VIEW_NAME}`...")
+
+    row_count = spark.sql(f"SELECT COUNT(*) AS row_count FROM {TEMP_VIEW_NAME}")
+    print("Row count via SQL:")
+    row_count.show()
+
+    sample_rows = spark.sql(
+        f"""
+        SELECT CustomerID, Contract, `Tenure Months`, `Monthly Charges`, `Churn Value`
+        FROM {TEMP_VIEW_NAME}
+        LIMIT 5
+        """
+    )
+    print("Sample rows via SQL:")
+    sample_rows.show(truncate=False)
+
+
 def main() -> None:
     """
-    Entry point: create a Spark session, load the raw dataset, and run
-    the Day 1 schema and target column checks.
+    Entry point: create a Spark session, load the raw dataset, run the
+    Day 1 checks, then register and verify the Spark SQL temp view.
     """
     spark = create_spark_session()
 
@@ -69,6 +111,9 @@ def main() -> None:
 
     inspect_schema(raw_df)
     validate_target_column(raw_df)
+
+    register_temp_view(raw_df)
+    verify_temp_view(spark)
 
     spark.stop()
 
