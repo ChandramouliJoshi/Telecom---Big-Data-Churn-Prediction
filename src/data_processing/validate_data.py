@@ -66,5 +66,42 @@ if total_rows == unique_customers:
     print("No Duplicate Customer IDs Found")
 else:
     print("Duplicate Customer IDs Detected")
+print("\n===== DATASET READY STATUS =====")
+
+critical_columns = [
+    "CustomerID",
+    "Tenure Months",
+    "Monthly Charges",
+    "Churn Value"
+]
+
+ready = True
+
+for column in critical_columns:
+
+    null_count = df.filter(
+        col(column).isNull()
+    ).count()
+
+    if null_count > 0:
+        ready = False
+        print(
+            f"FAIL - {column} contains {null_count} null values"
+        )
+    else:
+        print(
+            f"PASS - {column} validation passed"
+        )
+
+if total_rows == unique_customers:
+    print("PASS - Customer uniqueness validation passed")
+else:
+    ready = False
+    print("FAIL - Duplicate customer records found")
+
+if ready:
+    print("PASS - Critical feature validation passed")
+    print("PASS - Dataset ready for feature engineering")
+    print("PASS - Dataset ready for model training")
 
 spark.stop()
