@@ -9,6 +9,10 @@ Day 1 scope:
 Day 2 scope:
 - Register the dataset as a Spark SQL temporary view.
 - Verify the temp view with simple validation queries.
+
+Day 3 scope:
+- Write aggregation queries: average tenure, average monthly charges,
+  and contract type distribution, broken down by churn status.
 """
 
 from pyspark.sql import DataFrame, SparkSession
@@ -100,10 +104,86 @@ def verify_temp_view(spark: SparkSession) -> None:
     sample_rows.show(truncate=False)
 
 
+def get_average_tenure(spark: SparkSession) -> DataFrame:
+    """
+    Calculate average tenure (in months) grouped by churn status.
+
+    Returns:
+        DataFrame with columns: Churn Value, avg_tenure_months.
+    """
+    query = f"""
+        SELECT
+            `Churn Value`,
+            ROUND(AVG(`Tenure Months`), 2) AS avg_tenure_months
+        FROM {TEMP_VIEW_NAME}
+        GROUP BY `Churn Value`
+        ORDER BY `Churn Value`
+    """
+    return spark.sql(query)
+
+
+def get_average_monthly_charges(spark: SparkSession) -> DataFrame:
+    """
+    Calculate average monthly charges grouped by churn status.
+
+    Returns:
+        DataFrame with columns: Churn Value, avg_monthly_charges.
+    """
+    query = f"""
+        SELECT
+            `Churn Value`,
+            ROUND(AVG(`Monthly Charges`), 2) AS avg_monthly_charges
+        FROM {TEMP_VIEW_NAME}
+        GROUP BY `Churn Value`
+        ORDER BY `Churn Value`
+    """
+    return spark.sql(query)
+
+
+def get_contract_distribution(spark: SparkSession) -> DataFrame:
+    """
+    Calculate the distribution of customers across contract types,
+    broken down by churn status.
+
+    Returns:
+        DataFrame with columns: Contract, Churn Value, customer_count,
+        avg_monthly_charges.
+    """
+    query = f"""
+        SELECT
+            Contract,
+            `Churn Value`,
+            COUNT(*) AS customer_count,
+            ROUND(AVG(`Monthly Charges`), 2) AS avg_monthly_charges
+        FROM {TEMP_VIEW_NAME}
+        GROUP BY Contract, `Churn Value`
+        ORDER BY Contract, `Churn Value`
+    """
+    return spark.sql(query)
+
+
+def run_aggregation_queries(spark: SparkSession) -> None:
+    """
+    Execute and display the Day 3 aggregation queries.
+
+    Args:
+        spark: Active SparkSession with the temp view already registered.
+    """
+    print("=== Average Tenure by Churn Status ===")
+    get_average_tenure(spark).show(truncate=False)
+
+    print("=== Average Monthly Charges by Churn Status ===")
+    get_average_monthly_charges(spark).show(truncate=False)
+
+    print("=== Contract Type Distribution by Churn Status ===")
+    get_contract_distribution(spark).show(truncate=False)
+
+
 def main() -> None:
     """
     Entry point: create a Spark session, load the raw dataset, run the
-    Day 1 checks, then register and verify the Spark SQL temp view.
+    Day 1 checks, register and verify the temp view (Day 2), then run
+    the Day 3 aggregation queries.
     """
     spark = create_spark_session()
 
@@ -114,6 +194,8 @@ def main() -> None:
 
     register_temp_view(raw_df)
     verify_temp_view(spark)
+
+    run_aggregation_queries(spark)
 
     spark.stop()
 
