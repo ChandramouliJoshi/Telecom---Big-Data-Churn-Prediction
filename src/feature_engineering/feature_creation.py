@@ -1,0 +1,88 @@
+"""
+Feature creation for the SparkScale Churn project.
+
+Day 4 scope:
+- Create the engineered feature `charge_per_tenure`.
+- Validate the generated feature for correctness and edge cases.
+"""
+
+from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql import functions as F
+
+from src.config.spark_config import create_spark_session
+from src.feature_engineering.spark_sql_features import load_raw_data
+
+
+def add_charge_per_tenure(df: DataFrame) -> DataFrame:
+    """
+    Create the `charge_per_tenure` engineered feature, defined as
+    Monthly Charges divided by Tenure Months.
+
+    Customers with zero tenure (new sign-ups) would cause a divide-by-zero
+    error, so for those rows `charge_per_tenure` is set equal to their
+    Monthly Charges instead (their first month's spend rate).
+
+    Args:
+        df: Raw telecom customer DataFrame.
+
+    Returns:
+        DataFrame with an added `charge_per_tenure` column.
+    """
+    return df.withColumn(
+        "charge_per_tenure",
+        F.when(
+            F.col("Tenure Months") == 0,
+            F.col("Monthly Charges"),
+        ).otherwise(
+            F.round(F.col("Monthly Charges") / F.col("Tenure Months"), 2)
+        ),
+    )
+
+
+def validate_charge_per_tenure(df: DataFrame) -> None:
+    """
+    Validate the `charge_per_tenure` feature: check for nulls, confirm
+    no negative or infinite values, and show summary statistics.
+
+    Args:
+        df: DataFrame containing the `charge_per_tenure` column.
+    """
+    null_count = df.filter(F.col("charge_per_tenure").isNull()).count()
+    print(f"Null values in charge_per_tenure: {null_count}")
+
+    negative_count = df.filter(F.col("charge_per_tenure") < 0).count()
+    print(f"Negative values in charge_per_tenure: {negative_count}")
+
+    zero_tenure_count = df.filter(F.col("Tenure Months") == 0).count()
+    print(f"Customers with zero tenure (handled separately): {zero_tenure_count}")
+
+    print("Summary statistics for charge_per_tenure:")
+    df.select("charge_per_tenure").describe().show()
+
+    print("Sample rows with the new feature:")
+    df.select(
+        "CustomerID",
+        "Tenure Months",
+        "Monthly Charges",
+        "charge_per_tenure",
+        "Churn Value",
+    ).show(10, truncate=False)
+
+
+def main() -> None:
+    """
+    Entry point: create a Spark session, load the raw dataset, create
+    the `charge_per_tenure` feature, and validate it.
+    """
+    spark: SparkSession = create_spark_session()
+
+    raw_df = load_raw_data(spark)
+    enriched_df = add_charge_per_tenure(raw_df)
+
+    validate_charge_per_tenure(enriched_df)
+
+    spark.stop()
+
+
+if __name__ == "__main__":
+    main()
