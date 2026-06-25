@@ -4,6 +4,10 @@ Feature creation for the SparkScale Churn project.
 Day 4 scope:
 - Create the engineered feature `charge_per_tenure`.
 - Validate the generated feature for correctness and edge cases.
+
+Day 5 scope:
+- Convert `Churn Label` (Yes/No) into a binary `churn_binary` column.
+- Validate the binary label against the existing `Churn Value` column.
 """
 
 from pyspark.sql import DataFrame, SparkSession
@@ -69,17 +73,65 @@ def validate_charge_per_tenure(df: DataFrame) -> None:
     ).show(10, truncate=False)
 
 
+def add_binary_churn_label(df: DataFrame) -> DataFrame:
+    """
+    Convert the `Churn Label` column (Yes/No) into a binary integer
+    column `churn_binary` (Yes -> 1, No -> 0).
+
+    Args:
+        df: Raw telecom customer DataFrame containing `Churn Label`.
+
+    Returns:
+        DataFrame with an added `churn_binary` column.
+    """
+    return df.withColumn(
+        "churn_binary",
+        F.when(F.col("Churn Label") == "Yes", F.lit(1))
+        .when(F.col("Churn Label") == "No", F.lit(0))
+        .otherwise(F.lit(None).cast("integer")),
+    )
+
+
+def validate_binary_churn_label(df: DataFrame) -> None:
+    """
+    Validate the `churn_binary` column: check for nulls (unexpected
+    `Churn Label` values) and confirm it matches the existing
+    `Churn Value` column exactly.
+
+    Args:
+        df: DataFrame containing both `churn_binary` and `Churn Value`.
+    """
+    null_count = df.filter(F.col("churn_binary").isNull()).count()
+    print(f"Null values in churn_binary (unexpected Churn Label values): {null_count}")
+
+    print("Distribution of churn_binary:")
+    df.groupBy("churn_binary").count().orderBy("churn_binary").show()
+
+    mismatch_count = df.filter(
+        F.col("churn_binary") != F.col("Churn Value")
+    ).count()
+    print(f"Rows where churn_binary differs from Churn Value: {mismatch_count}")
+
+    print("Sample rows comparing churn_binary to Churn Value:")
+    df.select("CustomerID", "Churn Label", "churn_binary", "Churn Value").show(
+        10, truncate=False
+    )
+
+
 def main() -> None:
     """
     Entry point: create a Spark session, load the raw dataset, create
-    the `charge_per_tenure` feature, and validate it.
+    the engineered features (Day 4 and Day 5), and validate them.
     """
     spark: SparkSession = create_spark_session()
 
     raw_df = load_raw_data(spark)
-    enriched_df = add_charge_per_tenure(raw_df)
 
+    enriched_df = add_charge_per_tenure(raw_df)
     validate_charge_per_tenure(enriched_df)
+
+    enriched_df = add_binary_churn_label(enriched_df)
+    validate_binary_churn_label(enriched_df)
 
     spark.stop()
 
