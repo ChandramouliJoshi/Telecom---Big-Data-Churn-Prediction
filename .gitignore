@@ -1,67 +1,81 @@
+# =========================
+
 # Python
-__pycache__/
+
+# =========================
+
+**pycache**/
 *.py[cod]
-*$py.class
-
-# Virtual Environment
-venv/
-env/
+*.pyo
+*.pyd
 .venv/
+venv/
+backend/tele/
 
-# Jupyter Notebook
+# Jupyter
+
 .ipynb_checkpoints/
 
-# VS Code
-.vscode/
-
-# PyCharm
-.idea/
+# =========================
 
 # Environment Variables
-.env
 
-# Logs
-*.log
+# =========================
+
+.env
+.env.*
+frontend/.env
+frontend/.env.*
+
+# =========================
+
+# Python Outputs
+
+# =========================
+
+backend/models/
+backend/outputs/
+
+# =========================
+
+# Node / React / Vite
+
+# =========================
+
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+
+# duplicate frontend
+
+sparkscale-ui/
+
+# =========================
+
+# IDE Files
+
+# =========================
+
+.vscode/
+.idea/
+
+# =========================
 
 # OS Files
+
+# =========================
+
 .DS_Store
 Thumbs.db
 
-# Spark Temporary Files
-spark-warehouse/
-metastore_db/
+# =========================
 
-# Spark Event Logs
-spark-events/
+# Logs
 
-# Model Files
-models/
-*.model
+# =========================
 
-# Processed Data
-data/processed/
-
-# Output Files
-outputs/
-
-# Large Raw Data Files
-data/raw/*.csv
-data/raw/*.parquet
-
-# Docker
-*.tar
-
-# MLflow (if used later)
-mlruns/
-
-# Build Files
-dist/
-build/
-*.egg-info/
-
-# Temporary Files
-tmp/
-temp/
-
-# Cache
-.cache/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*

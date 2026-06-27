@@ -100,48 +100,122 @@ Churn Value
 
 ```text
 Telecom - Big Data Churn Prediction/
-
-├── data/
-│   └── raw/
-│       └── Telco_customer_churn.csv
-│
-├── docker/
-│
-├── models/
-│
-├── notebooks/
-│   └── eda.ipynb
-│
-├── outputs/
-│
-├── src/
-│   ├── config/
-│   │   └── spark_config.py
-│   │
-│   ├── data_processing/
-│   │   ├── load_data.py
-│   │   └── validate_data.py
-│   │
-│   ├── feature_engineering/
-│   │   ├── spark_sql_features.py
-│   │   ├── feature_creation.py
-│   │   └── vector_assembler.py
-│   │
-│   ├── modeling/
-│   │   ├── train_logistic.py
-│   │   ├── train_random_forest.py
-│   │   └── evaluate.py
-│   │
-│   ├── deployment/
-│   │   ├── save_pipeline.py
-│   │   └── batch_predict.py
-│   │
-│   └── utils/
-│       └── logger.py
-│
+├── backend/
+│   ├── __init__.py
+│   ├── data/
+│   │   ├── processed/
+│   │   └── raw/
+│   │       ├── Telco_customer_churn.csv
+│   │       └── Telco_customer_churn.xlsx
+│   ├── docker/
+│   ├── models/
+│   ├── notebooks/
+│   │   └── eda.ipynb
+│   ├── outputs/
+│   └── src/
+│       ├── __init__.py
+│       ├── config/
+│       │   ├── __init__.py
+│       │   ├── paths.py
+│       │   └── spark_config.py
+│       ├── data_processing/
+│       │   ├── __init__.py
+│       │   ├── load_data.py
+│       │   └── validate_data.py
+│       ├── deployment/
+│       │   ├── __init__.py
+│       │   ├── batch_predict.py
+│       │   └── save_pipeline.py
+│       ├── feature_engineering/
+│       │   ├── __init__.py
+│       │   ├── spark_sql_features.py
+│       │   └── vector_assembler.py
+│       ├── modeling/
+│       │   ├── __init__.py
+│       │   ├── evaluate.py
+│       │   ├── train_logistic.py
+│       │   └── train_random_forest.py
+│       └── utils/
+│           ├── __init__.py
+│           └── logger.py
+├── frontend/
+│   ├── index.html
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── vite.config.js
+│   ├── eslint.config.js
+│   ├── README.md
+│   ├── public/
+│   │   ├── favicon.svg
+│   │   ├── icons.svg
+│   │   └── src/
+│   │       ├── components/
+│   │       │   ├── analytics/
+│   │       │   │   ├── ChurnChart.jsx
+│   │       │   │   ├── MonthlyChargeChart.jsx
+│   │       │   │   └── TenureChart.jsx
+│   │       │   ├── common/
+│   │       │   │   ├── Loader.jsx
+│   │       │   │   └── PageHeader.jsx
+│   │       │   ├── dashboard/
+│   │       │   │   ├── AllInsightCard.jsx
+│   │       │   │   ├── HighRiskTable.jsx
+│   │       │   │   ├── PipelineCard.jsx
+│   │       │   │   ├── ProgressCard.jsx
+│   │       │   │   └── StatCard.jsx
+│   │       │   ├── layout/
+│   │       │   │   ├── MainLayout.jsx
+│   │       │   │   ├── Sidebar.jsx
+│   │       │   │   └── TopNavBar.jsx
+│   │       │   └── prediction/
+│   │       │       ├── PredictionForm.jsx
+│   │       │       ├── PredictionResult.jsx
+│   │       │       └── RiskGauge.jsx
+│   │       ├── data/
+│   │       │   ├── chartData.js
+│   │       │   ├── dashboardData.js
+│   │       │   ├── metricsData.js
+│   │       │   └── pipelineData.js
+│   │       ├── hooks/
+│   │       │   ├── index.js
+│   │       │   ├── useAnalytics.js
+│   │       │   ├── useDashboard.js
+│   │       │   ├── useMetrics.js
+│   │       │   ├── usePipeline.js
+│   │       │   ├── usePrediction.js
+│   │       │   ├── useSidebar.js
+│   │       │   └── useTheme.js
+│   │       ├── layouts/
+│   │       │   └── MainLayout.jsx
+│   │       ├── pages/
+│   │       │   ├── Analytics.jsx
+│   │       │   ├── ChurnPrediction.jsx
+│   │       │   ├── Dashboard.jsx
+│   │       │   ├── DataPipeline.jsx
+│   │       │   ├── FeatureEngineering.jsx
+│   │       │   └── ModelPerformance.jsx
+│   │       ├── routes/
+│   │       │   └── AppRoutes.jsx
+│   │       └── services/
+│   │           ├── api.js
+│   │           ├── dashboardService.js
+│   │           └── predictionService.js
+│   └── src/
+│       ├── App.css
+│       ├── App.jsx
+│       ├── index.css
+│       ├── main.jsx
+│       └── assets/
+│           ├── hero.png
+│           ├── react.svg
+│           └── vite.svg
+├── .gitignore
+├── convert.py
+├── file strcture.md
+├── main.py
 ├── README.md
 ├── requirements.txt
-└── main.py
+└── test.py
 ```
 
 ---
@@ -214,7 +288,6 @@ Responsibilities:
 Files:
 
 * spark_sql_features.py
-* feature_creation.py
 * vector_assembler.py
 
 Responsibilities:
@@ -268,25 +341,25 @@ pip install -r requirements.txt
 Run Data Validation
 
 ```bash
-python -m src.data_processing.validate_data
+python -m backend.src.data_processing.validate_data
 ```
 
 Run Feature Engineering
 
 ```bash
-python -m src.feature_engineering.spark_sql_features
+python -m backend.src.feature_engineering.spark_sql_features
 ```
 
 Train Model
 
 ```bash
-python -m src.modeling.train_logistic
+python -m backend.src.modeling.train_logistic
 ```
 
 Generate Predictions
 
 ```bash
-python -m src.deployment.batch_predict
+python -m backend.src.deployment.batch_predict
 ```
 
 ---
@@ -310,3 +383,7 @@ The system predicts customer churn likelihood and enables telecom companies to i
 ## Author
 
 Developed as part of the Zaalima Internship Program.
+
+
+
+
