@@ -5,6 +5,11 @@ Day 6 scope:
 - Select the final set of model features (numeric + categorical).
 - Index categorical columns into numeric form (required before assembly).
 - Create the VectorAssembler that will combine features into a vector.
+
+Day 7 scope:
+- Fit and apply the StringIndexers and VectorAssembler.
+- Generate the final `features` vector column.
+- Verify feature vector dimensions and inspect sample output.
 """
 
 from typing import List
@@ -12,6 +17,7 @@ from typing import List
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 from pyspark.ml.feature import StringIndexer, VectorAssembler
+from pyspark.ml import Pipeline, PipelineModel
 
 from src.config.spark_config import create_spark_session
 from src.feature_engineering.spark_sql_features import load_raw_data
@@ -47,6 +53,10 @@ CATEGORICAL_FEATURE_COLUMNS: List[str] = (
 )
 
 OUTPUT_FEATURES_COLUMN = "features"
+
+EXPECTED_FEATURE_DIMENSION = len(NUMERIC_FEATURE_COLUMNS) + len(
+    CATEGORICAL_FEATURE_COLUMNS
+)
 
 
 def select_model_features(df: DataFrame) -> DataFrame:
@@ -125,11 +135,75 @@ def build_vector_assembler(
     )
 
 
+def build_feature_pipeline() -> Pipeline:
+    """
+    Assemble the full feature engineering pipeline: StringIndexers for
+    all categorical columns followed by the VectorAssembler.
+
+    Returns:
+        A Pipeline ready to be fit on the model-ready DataFrame.
+    """
+    indexers = build_string_indexers(CATEGORICAL_FEATURE_COLUMNS)
+    assembler = build_vector_assembler(
+        NUMERIC_FEATURE_COLUMNS, CATEGORICAL_FEATURE_COLUMNS
+    )
+    return Pipeline(stages=indexers + [assembler])
+
+
+def generate_feature_vectors(model_df: DataFrame) -> DataFrame:
+    """
+    Fit the feature pipeline (indexers + assembler) on the model-ready
+    DataFrame and apply it to generate the `features` vector column.
+
+    Args:
+        model_df: DataFrame with selected numeric and categorical columns.
+
+    Returns:
+        DataFrame with an added `features` vector column.
+    """
+    pipeline = build_feature_pipeline()
+    pipeline_model: PipelineModel = pipeline.fit(model_df)
+    return pipeline_model.transform(model_df)
+
+
+def verify_feature_dimensions(transformed_df: DataFrame) -> None:
+    """
+    Verify that the generated `features` vectors have the expected
+    dimension (one slot per numeric + categorical feature), and inspect
+    sample rows for correctness.
+
+    Args:
+        transformed_df: DataFrame containing the `features` vector column.
+    """
+    sample_vector = transformed_df.select(OUTPUT_FEATURES_COLUMN).first()[
+        OUTPUT_FEATURES_COLUMN
+    ]
+    actual_dimension = sample_vector.size
+
+    print(f"Expected feature vector dimension: {EXPECTED_FEATURE_DIMENSION}")
+    print(f"Actual feature vector dimension: {actual_dimension}")
+
+    if actual_dimension == EXPECTED_FEATURE_DIMENSION:
+        print("Feature dimension check PASSED.")
+    else:
+        print("Feature dimension check FAILED.")
+
+    null_feature_count = transformed_df.filter(
+        F.col(OUTPUT_FEATURES_COLUMN).isNull()
+    ).count()
+    print(f"Rows with null feature vectors: {null_feature_count}")
+
+    print("Sample feature vectors:")
+    transformed_df.select(
+        "CustomerID", OUTPUT_FEATURES_COLUMN, "Churn Value"
+    ).show(5, truncate=False)
+
+
 def main() -> None:
     """
     Entry point: load data, create engineered features, select the
-    final model feature set, and set up the StringIndexers and
-    VectorAssembler for the modeling pipeline.
+    final model feature set, generate feature vectors, and verify
+    their dimensions.
     """
     spark: SparkSession = create_spark_session()
 
@@ -137,20 +211,8 @@ def main() -> None:
     enriched_df = add_charge_per_tenure(raw_df)
     model_df = select_model_features(enriched_df)
 
-    print("Selected model feature columns:")
-    print(model_df.columns)
-
-    indexers = build_string_indexers(CATEGORICAL_FEATURE_COLUMNS)
-    print(f"Created {len(indexers)} StringIndexer stages for categorical columns:")
-    for indexer in indexers:
-        print(f"  {indexer.getInputCol()} -> {indexer.getOutputCol()}")
-
-    assembler = build_vector_assembler(
-        NUMERIC_FEATURE_COLUMNS, CATEGORICAL_FEATURE_COLUMNS
-    )
-    print(f"VectorAssembler input columns ({len(assembler.getInputCols())}):")
-    print(assembler.getInputCols())
-    print(f"VectorAssembler output column: {assembler.getOutputCol()}")
+    transformed_df = generate_feature_vectors(model_df)
+    verify_feature_dimensions(transformed_df)
 
     spark.stop()
 
