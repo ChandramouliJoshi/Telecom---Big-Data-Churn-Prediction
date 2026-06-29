@@ -10,6 +10,11 @@ Day 7 scope:
 - Fit and apply the StringIndexers and VectorAssembler.
 - Generate the final `features` vector column.
 - Verify feature vector dimensions and inspect sample output.
+
+Day 8 scope:
+- Run explain(True) on the transformed DataFrame to inspect the
+  logical and physical execution plans.
+- Trigger an action so the DAG is visible in the Spark UI for review.
 """
 
 from typing import List
@@ -199,11 +204,37 @@ def verify_feature_dimensions(transformed_df: DataFrame) -> None:
     ).show(5, truncate=False)
 
 
+def analyze_execution_plan(transformed_df: DataFrame) -> None:
+    """
+    Print the logical and physical execution plans for the transformed
+    feature DataFrame, then trigger an action so the corresponding job
+    and its DAG appear in the Spark UI (http://localhost:4040 by
+    default) for visual review and screenshot capture.
+
+    Args:
+        transformed_df: DataFrame containing the `features` vector column.
+    """
+    print("=== Execution Plan (explain(True)) ===")
+    transformed_df.explain(True)
+
+    # Trigger an action so the plan above is actually executed as a job,
+    # which makes the DAG visible under the "Jobs" / "SQL" tabs in the
+    # Spark UI. Without an action, explain() only shows the plan and no
+    # job is recorded for the DAG visualization.
+    row_count = transformed_df.count()
+    print(f"Triggered action: row count = {row_count}")
+    print(
+        "Open the Spark UI (default: http://localhost:4040) and check the "
+        "'Jobs' tab for this run, then open the latest job's 'DAG "
+        "Visualization' to capture the execution graph."
+    )
+
+
 def main() -> None:
     """
     Entry point: load data, create engineered features, select the
-    final model feature set, generate feature vectors, and verify
-    their dimensions.
+    final model feature set, generate feature vectors, verify their
+    dimensions, and analyze the execution plan/DAG.
     """
     spark: SparkSession = create_spark_session()
 
@@ -213,6 +244,7 @@ def main() -> None:
 
     transformed_df = generate_feature_vectors(model_df)
     verify_feature_dimensions(transformed_df)
+    analyze_execution_plan(transformed_df)
 
     spark.stop()
 
