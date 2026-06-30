@@ -1,250 +1,247 @@
 """
-Feature vector assembly for the SparkScale Churn project.
+Spark SQL based exploration for the SparkScale Churn project.
 
-Day 6 scope:
-- Select the final set of model features (numeric + categorical).
-- Index categorical columns into numeric form (required before assembly).
-- Create the VectorAssembler that will combine features into a vector.
+Day 1 scope:
+- Load the raw telecom customer dataset.
+- Inspect schema and columns.
+- Validate the target column (`Churn Value`) for modeling readiness.
 
-Day 7 scope:
-- Fit and apply the StringIndexers and VectorAssembler.
-- Generate the final `features` vector column.
-- Verify feature vector dimensions and inspect sample output.
+Day 2 scope:
+- Register the dataset as a Spark SQL temporary view.
+- Verify the temp view with simple validation queries.
 
-Day 8 scope:
-- Run explain(True) on the transformed DataFrame to inspect the
-  logical and physical execution plans.
-- Trigger an action so the DAG is visible in the Spark UI for review.
+Day 3 scope:
+- Write aggregation queries: average tenure, average monthly charges,
+  and contract type distribution, broken down by churn status.
+
+Day 9 scope:
+- Refactor SQL queries for readability and consistency.
+- Centralize query strings and reduce duplication.
 """
 
-from typing import List
-
 from pyspark.sql import DataFrame, SparkSession
-from pyspark.sql import functions as F
-from pyspark.ml.feature import StringIndexer, VectorAssembler
-from pyspark.ml import Pipeline, PipelineModel
 
 from src.config.spark_config import create_spark_session
-from src.feature_engineering.spark_sql_features import load_raw_data
-from src.feature_engineering.feature_creation import add_charge_per_tenure
 
-# Numeric columns used directly in the model, including the engineered
-# charge_per_tenure feature.
-NUMERIC_FEATURE_COLUMNS: List[str] = [
-    "Tenure Months",
-    "Monthly Charges",
-    "Total Charges",
-    "charge_per_tenure",
-]
+RAW_DATA_PATH = "data/raw/Telco_customer_churn.csv"
+TEMP_VIEW_NAME = "telco_customers"
 
-# Binary (Yes/No) categorical columns, simple to index with two categories.
-BINARY_CATEGORICAL_COLUMNS: List[str] = [
-    "Senior Citizen",
-    "Partner",
-    "Dependents",
-    "Phone Service",
-    "Paperless Billing",
-]
-
-# Multi-class categorical columns requiring indexing.
-MULTI_CLASS_CATEGORICAL_COLUMNS: List[str] = [
-    "Contract",
-    "Internet Service",
-    "Payment Method",
-]
-
-CATEGORICAL_FEATURE_COLUMNS: List[str] = (
-    BINARY_CATEGORICAL_COLUMNS + MULTI_CLASS_CATEGORICAL_COLUMNS
-)
-
-OUTPUT_FEATURES_COLUMN = "features"
-
-EXPECTED_FEATURE_DIMENSION = len(NUMERIC_FEATURE_COLUMNS) + len(
-    CATEGORICAL_FEATURE_COLUMNS
-)
+CHURN_COLUMN = "`Churn Value`"
+TENURE_COLUMN = "`Tenure Months`"
+MONTHLY_CHARGES_COLUMN = "`Monthly Charges`"
 
 
-def select_model_features(df: DataFrame) -> DataFrame:
+# --------------------------------------------------------------------------
+# Data loading
+# --------------------------------------------------------------------------
+
+def load_raw_data(spark: SparkSession, path: str = RAW_DATA_PATH) -> DataFrame:
     """
-    Select and clean the final set of columns needed for modeling.
-
-    `Total Charges` is loaded as a string in the raw dataset and contains
-    blank values for customers with zero tenure, so it is cast to double
-    and missing values are filled with 0.0.
+    Load the raw telecom customer dataset from CSV into a Spark DataFrame.
 
     Args:
-        df: DataFrame containing raw and engineered columns.
+        spark: Active SparkSession.
+        path: Path to the raw CSV file.
 
     Returns:
-        DataFrame containing only the columns required for modeling,
-        plus the identifier and target columns.
+        DataFrame containing the raw telecom customer records.
     """
-    cleaned_df = df.withColumn(
-        "Total Charges",
-        F.when(F.trim(F.col("Total Charges")) == "", 0.0).otherwise(
-            F.col("Total Charges").cast("double")
-        ),
-    )
-
-    selected_columns = (
-        ["CustomerID", "Churn Value"]
-        + NUMERIC_FEATURE_COLUMNS
-        + CATEGORICAL_FEATURE_COLUMNS
-    )
-    return cleaned_df.select(*selected_columns)
+    return spark.read.csv(path, header=True, inferSchema=True)
 
 
-def build_string_indexers(categorical_columns: List[str]) -> List[StringIndexer]:
+# --------------------------------------------------------------------------
+# Schema and target column validation (Day 1)
+# --------------------------------------------------------------------------
+
+def inspect_schema(df: DataFrame) -> None:
     """
-    Build a StringIndexer for each categorical column. StringIndexer
-    converts string category values into numeric indices, which is
-    required because VectorAssembler only accepts numeric input columns.
+    Print the dataset schema and row/column counts for initial review.
 
     Args:
-        categorical_columns: List of categorical column names to index.
+        df: Raw telecom customer DataFrame.
+    """
+    print(f"Total rows: {df.count()}")
+    print(f"Total columns: {len(df.columns)}")
+    print("Schema:")
+    df.printSchema()
+
+
+def validate_target_column(df: DataFrame) -> None:
+    """
+    Validate the `Churn Value` target column: confirm it only contains
+    the expected binary values (0 = not churned, 1 = churned) and show
+    the class distribution.
+
+    Args:
+        df: Raw telecom customer DataFrame.
+    """
+    print("Distinct values in target column `Churn Value`:")
+    df.select("Churn Value").distinct().show()
+
+    print("Class distribution for `Churn Value`:")
+    df.groupBy("Churn Value").count().orderBy("Churn Value").show()
+
+
+# --------------------------------------------------------------------------
+# Temp view registration and verification (Day 2)
+# --------------------------------------------------------------------------
+
+def register_temp_view(df: DataFrame, view_name: str = TEMP_VIEW_NAME) -> None:
+    """
+    Register a DataFrame as a Spark SQL temporary view so it can be
+    queried with SQL syntax.
+
+    Args:
+        df: DataFrame to register.
+        view_name: Name to register the view under.
+    """
+    df.createOrReplaceTempView(view_name)
+
+
+def verify_temp_view(spark: SparkSession) -> None:
+    """
+    Run simple validation queries against the temp view to confirm it
+    was registered correctly and is queryable.
+
+    Args:
+        spark: Active SparkSession with the temp view already registered.
+    """
+    print(f"Verifying temp view `{TEMP_VIEW_NAME}`...")
+
+    print("Row count via SQL:")
+    run_query(spark, f"SELECT COUNT(*) AS row_count FROM {TEMP_VIEW_NAME}").show()
+
+    print("Sample rows via SQL:")
+    run_query(
+        spark,
+        f"""
+        SELECT CustomerID, Contract, {TENURE_COLUMN}, {MONTHLY_CHARGES_COLUMN}, {CHURN_COLUMN}
+        FROM {TEMP_VIEW_NAME}
+        LIMIT 5
+        """,
+    ).show(truncate=False)
+
+
+# --------------------------------------------------------------------------
+# Query helper (Day 9 refactor: single place that runs SQL against the view)
+# --------------------------------------------------------------------------
+
+def run_query(spark: SparkSession, query: str) -> DataFrame:
+    """
+    Execute a SQL query against the active SparkSession and return the
+    resulting DataFrame. Centralizing query execution here keeps the
+    individual aggregation functions focused purely on their SQL.
+
+    Args:
+        spark: Active SparkSession.
+        query: SQL query string to execute.
 
     Returns:
-        List of configured StringIndexer instances.
+        DataFrame containing the query result.
     """
-    return [
-        StringIndexer(
-            inputCol=column,
-            outputCol=f"{column}_index",
-            handleInvalid="keep",
-        )
-        for column in categorical_columns
-    ]
+    return spark.sql(query)
 
 
-def build_vector_assembler(
-    numeric_columns: List[str], categorical_columns: List[str]
-) -> VectorAssembler:
+# --------------------------------------------------------------------------
+# Aggregation queries (Day 3)
+# --------------------------------------------------------------------------
+
+def get_average_tenure(spark: SparkSession) -> DataFrame:
     """
-    Create the VectorAssembler that combines numeric features and
-    indexed categorical features into a single `features` vector column.
-
-    Args:
-        numeric_columns: Numeric feature column names.
-        categorical_columns: Categorical column names (pre-indexing).
+    Calculate average tenure (in months) grouped by churn status.
 
     Returns:
-        Configured VectorAssembler instance.
+        DataFrame with columns: Churn Value, avg_tenure_months.
     """
-    indexed_columns = [f"{column}_index" for column in categorical_columns]
-    input_columns = numeric_columns + indexed_columns
-
-    return VectorAssembler(
-        inputCols=input_columns,
-        outputCol=OUTPUT_FEATURES_COLUMN,
-        handleInvalid="keep",
-    )
-
-
-def build_feature_pipeline() -> Pipeline:
+    query = f"""
+        SELECT
+            {CHURN_COLUMN},
+            ROUND(AVG({TENURE_COLUMN}), 2) AS avg_tenure_months
+        FROM {TEMP_VIEW_NAME}
+        GROUP BY {CHURN_COLUMN}
+        ORDER BY {CHURN_COLUMN}
     """
-    Assemble the full feature engineering pipeline: StringIndexers for
-    all categorical columns followed by the VectorAssembler.
+    return run_query(spark, query)
+
+
+def get_average_monthly_charges(spark: SparkSession) -> DataFrame:
+    """
+    Calculate average monthly charges grouped by churn status.
 
     Returns:
-        A Pipeline ready to be fit on the model-ready DataFrame.
+        DataFrame with columns: Churn Value, avg_monthly_charges.
     """
-    indexers = build_string_indexers(CATEGORICAL_FEATURE_COLUMNS)
-    assembler = build_vector_assembler(
-        NUMERIC_FEATURE_COLUMNS, CATEGORICAL_FEATURE_COLUMNS
-    )
-    return Pipeline(stages=indexers + [assembler])
-
-
-def generate_feature_vectors(model_df: DataFrame) -> DataFrame:
+    query = f"""
+        SELECT
+            {CHURN_COLUMN},
+            ROUND(AVG({MONTHLY_CHARGES_COLUMN}), 2) AS avg_monthly_charges
+        FROM {TEMP_VIEW_NAME}
+        GROUP BY {CHURN_COLUMN}
+        ORDER BY {CHURN_COLUMN}
     """
-    Fit the feature pipeline (indexers + assembler) on the model-ready
-    DataFrame and apply it to generate the `features` vector column.
+    return run_query(spark, query)
 
-    Args:
-        model_df: DataFrame with selected numeric and categorical columns.
+
+def get_contract_distribution(spark: SparkSession) -> DataFrame:
+    """
+    Calculate the distribution of customers across contract types,
+    broken down by churn status.
 
     Returns:
-        DataFrame with an added `features` vector column.
+        DataFrame with columns: Contract, Churn Value, customer_count,
+        avg_monthly_charges.
     """
-    pipeline = build_feature_pipeline()
-    pipeline_model: PipelineModel = pipeline.fit(model_df)
-    return pipeline_model.transform(model_df)
+    query = f"""
+        SELECT
+            Contract,
+            {CHURN_COLUMN},
+            COUNT(*) AS customer_count,
+            ROUND(AVG({MONTHLY_CHARGES_COLUMN}), 2) AS avg_monthly_charges
+        FROM {TEMP_VIEW_NAME}
+        GROUP BY Contract, {CHURN_COLUMN}
+        ORDER BY Contract, {CHURN_COLUMN}
+    """
+    return run_query(spark, query)
 
 
-def verify_feature_dimensions(transformed_df: DataFrame) -> None:
+def run_aggregation_queries(spark: SparkSession) -> None:
     """
-    Verify that the generated `features` vectors have the expected
-    dimension (one slot per numeric + categorical feature), and inspect
-    sample rows for correctness.
+    Execute and display the Day 3 aggregation queries.
 
     Args:
-        transformed_df: DataFrame containing the `features` vector column.
+        spark: Active SparkSession with the temp view already registered.
     """
-    sample_vector = transformed_df.select(OUTPUT_FEATURES_COLUMN).first()[
-        OUTPUT_FEATURES_COLUMN
-    ]
-    actual_dimension = sample_vector.size
+    print("=== Average Tenure by Churn Status ===")
+    get_average_tenure(spark).show(truncate=False)
 
-    print(f"Expected feature vector dimension: {EXPECTED_FEATURE_DIMENSION}")
-    print(f"Actual feature vector dimension: {actual_dimension}")
+    print("=== Average Monthly Charges by Churn Status ===")
+    get_average_monthly_charges(spark).show(truncate=False)
 
-    if actual_dimension == EXPECTED_FEATURE_DIMENSION:
-        print("Feature dimension check PASSED.")
-    else:
-        print("Feature dimension check FAILED.")
-
-    null_feature_count = transformed_df.filter(
-        F.col(OUTPUT_FEATURES_COLUMN).isNull()
-    ).count()
-    print(f"Rows with null feature vectors: {null_feature_count}")
-
-    print("Sample feature vectors:")
-    transformed_df.select(
-        "CustomerID", OUTPUT_FEATURES_COLUMN, "Churn Value"
-    ).show(5, truncate=False)
+    print("=== Contract Type Distribution by Churn Status ===")
+    get_contract_distribution(spark).show(truncate=False)
 
 
-def analyze_execution_plan(transformed_df: DataFrame) -> None:
-    """
-    Print the logical and physical execution plans for the transformed
-    feature DataFrame, then trigger an action so the corresponding job
-    and its DAG appear in the Spark UI (http://localhost:4040 by
-    default) for visual review and screenshot capture.
-
-    Args:
-        transformed_df: DataFrame containing the `features` vector column.
-    """
-    print("=== Execution Plan (explain(True)) ===")
-    transformed_df.explain(True)
-
-    # Trigger an action so the plan above is actually executed as a job,
-    # which makes the DAG visible under the "Jobs" / "SQL" tabs in the
-    # Spark UI. Without an action, explain() only shows the plan and no
-    # job is recorded for the DAG visualization.
-    row_count = transformed_df.count()
-    print(f"Triggered action: row count = {row_count}")
-    print(
-        "Open the Spark UI (default: http://localhost:4040) and check the "
-        "'Jobs' tab for this run, then open the latest job's 'DAG "
-        "Visualization' to capture the execution graph."
-    )
-
+# --------------------------------------------------------------------------
+# Entry point
+# --------------------------------------------------------------------------
 
 def main() -> None:
     """
-    Entry point: load data, create engineered features, select the
-    final model feature set, generate feature vectors, verify their
-    dimensions, and analyze the execution plan/DAG.
+    Entry point: create a Spark session, load the raw dataset, run the
+    Day 1 checks, register and verify the temp view (Day 2), then run
+    the Day 3 aggregation queries.
     """
-    spark: SparkSession = create_spark_session()
+    spark = create_spark_session()
 
     raw_df = load_raw_data(spark)
-    enriched_df = add_charge_per_tenure(raw_df)
-    model_df = select_model_features(enriched_df)
 
-    transformed_df = generate_feature_vectors(model_df)
-    verify_feature_dimensions(transformed_df)
-    analyze_execution_plan(transformed_df)
+    inspect_schema(raw_df)
+    validate_target_column(raw_df)
+
+    register_temp_view(raw_df)
+    verify_temp_view(spark)
+
+    run_aggregation_queries(spark)
 
     spark.stop()
 
